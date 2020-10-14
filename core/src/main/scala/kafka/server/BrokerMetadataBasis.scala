@@ -123,6 +123,24 @@ class BrokerMetadataBasis(val kafkaConfig: KafkaConfig,
  * Ability to process an ApiMessage based on an existing broker metadata basis
  */
 trait ApiMessageProcessor {
+  /**
+   * Process a single message
+   *
+   * @param brokerMetadataBasis the basis upon which to process the record
+   * @param apiMessage the record to process
+   * @return the resulting basis
+   */
   def process(brokerMetadataBasis: BrokerMetadataBasis, apiMessage: ApiMessage): BrokerMetadataBasis
+
+  /**
+   * Process a list of messages
+   *
+   * @param brokerMetadataBasis the basis upon which to process the records
+   * @param apiMessages the records to process
+   * @return the resulting basis
+   */
+  def process(brokerMetadataBasis: BrokerMetadataBasis, apiMessages: List[ApiMessage]): BrokerMetadataBasis = {
+    throw new UnsupportedOperationException(s"${getClass} does not support processing a list of messages")
+  }
 }
 

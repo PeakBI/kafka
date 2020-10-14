@@ -32,46 +32,59 @@ import scala.jdk.CollectionConverters._
 
 class BrokerRecordProcessor extends ApiMessageProcessor {
   override def process(brokerMetadataBasis: BrokerMetadataBasis, apiMessage: ApiMessage): BrokerMetadataBasis = {
-      apiMessage match {
-        case brokerRecord: BrokerRecord =>
-          val brokerMetadataValue = brokerMetadataBasis.getValue()
+    apiMessage match {
+      case brokerRecord: BrokerRecord =>
+        val brokerMetadataValue = brokerMetadataBasis.getValue()
 
-          val newMetadataCacheBasis: MetadataCacheBasis = process(brokerRecord, brokerMetadataValue.metadataCacheBasis)
+        val newMetadataCacheBasis: MetadataCacheBasis = process(List(brokerRecord), brokerMetadataValue.metadataCacheBasis)
 
-          brokerMetadataBasis.newBasis(brokerMetadataValue.newValue(newMetadataCacheBasis))
-        case unexpected => throw new IllegalArgumentException(s"apiMessage was not of type BrokerRecord: ${unexpected.getClass}")
-      }
+        brokerMetadataBasis.newBasis(brokerMetadataValue.newValue(newMetadataCacheBasis))
+      case unexpected => throw new IllegalArgumentException(s"apiMessage was not of type BrokerRecord: ${unexpected.getClass}")
+    }
+  }
+
+  override def process(brokerMetadataBasis: BrokerMetadataBasis, apiMessages: List[ApiMessage]): BrokerMetadataBasis = {
+    if (apiMessages.isEmpty) {
+      return brokerMetadataBasis
+    }
+    apiMessages.foreach(message => if (!message.isInstanceOf[BrokerRecord]) {
+      throw new IllegalArgumentException(s"$getClass can only process a list of records when they are all broker records: $apiMessages")
+    })
+    val brokerMetadataValue = brokerMetadataBasis.getValue()
+    val newMetadataCacheBasis: MetadataCacheBasis = process(
+      apiMessages.asInstanceOf[List[BrokerRecord]], brokerMetadataValue.metadataCacheBasis)
+    brokerMetadataBasis.newBasis(brokerMetadataValue.newValue(newMetadataCacheBasis))
   }
 
   // visible for testing
-  private[server] def process(brokerRecord: BrokerRecord, metadataCacheBasis: MetadataCacheBasis) = {
+  private[server] def process(brokerRecords: List[BrokerRecord], metadataCacheBasis: MetadataCacheBasis) = {
     val metadataSnapshot = metadataCacheBasis.getValue()
-    val upsertBrokerId = brokerRecord.brokerId()
-    val existingUpsertBrokerState = metadataSnapshot.aliveBrokers.get(upsertBrokerId)
+    val existingAliveBrokers = metadataSnapshot.aliveBrokers
+    val numAlreadyAlive = brokerRecords.count(broker => existingAliveBrokers.contains(broker.brokerId()))
+    val newSize = existingAliveBrokers.size + brokerRecords.size - numAlreadyAlive
     // allocate new alive brokers/nodes
-    val newAliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size + (if (existingUpsertBrokerState.isEmpty) 1 else 0))
-    val newAliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size + (if (existingUpsertBrokerState.isEmpty) 1 else 0))
+    val newAliveBrokers = new mutable.LongMap[Broker](newSize)
+    val newAliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](newSize)
     // insert references to existing alive brokers/nodes for ones that don't correspond to the upserted broker
     for ((existingBrokerId, existingBroker) <- metadataSnapshot.aliveBrokers) {
-      if (existingBrokerId != upsertBrokerId) {
-        newAliveBrokers(existingBrokerId) = existingBroker
-      }
+      newAliveBrokers(existingBrokerId) = existingBroker
     }
     for ((existingBrokerId, existingListenerNameToNodeMap) <- metadataSnapshot.aliveNodes) {
-      if (existingBrokerId != upsertBrokerId) {
-        newAliveNodes(existingBrokerId) = existingListenerNameToNodeMap
+      newAliveNodes(existingBrokerId) = existingListenerNameToNodeMap
+    }
+    // add new alive broker/nodes for the upserted brokers
+    brokerRecords.foreach(brokerRecord => {
+      val nodes = new util.HashMap[ListenerName, Node]
+      val endPoints = new ArrayBuffer[EndPoint]
+      val brokerId = brokerRecord.brokerId()
+      brokerRecord.endPoints().forEach { ep =>
+        val listenerName = new ListenerName(ep.name())
+        endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
+        nodes.put(listenerName, new Node(brokerId, ep.host, ep.port))
       }
-    }
-    // add new alive broker/nodes for the upserted broker
-    val nodes = new util.HashMap[ListenerName, Node]
-    val endPoints = new ArrayBuffer[EndPoint]
-    brokerRecord.endPoints().forEach { ep =>
-      val listenerName = new ListenerName(ep.name())
-      endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
-      nodes.put(listenerName, new Node(upsertBrokerId, ep.host, ep.port))
-    }
-    newAliveBrokers(upsertBrokerId) = Broker(upsertBrokerId, endPoints, Option(brokerRecord.rack))
-    newAliveNodes(upsertBrokerId) = nodes.asScala
+      newAliveBrokers(brokerId) = Broker(brokerId, endPoints, Option(brokerRecord.rack))
+      newAliveNodes(brokerId) = nodes.asScala
+    })
     metadataCacheBasis.metadataCache.logListenersNotIdenticalIfNecessary(newAliveNodes)
 
     val newMetadataCacheBasis = metadataCacheBasis.newBasis(

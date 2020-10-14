@@ -23,7 +23,7 @@ import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.metadata.MetadataRecordType
+import org.apache.kafka.common.metadata.{BrokerRecord, MetadataRecordType, TopicRecord}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.Time
 
@@ -113,9 +113,33 @@ class BrokerMetadataEventManager(config: KafkaConfig,
     try {
       trace(s"Handling metadata messages: $apiMessages")
       var basis = currentBasis
-      apiMessages.foreach(message => {
-        val processor = processors.get(MetadataRecordType.fromId(message.apiKey()))
-        basis = processor.process(basis, message)
+      // coalesce certain records together so they can be processed more efficiently as a single batch
+      val groupedMessages = apiMessages.groupBy(m => MetadataRecordType.fromId(m.apiKey()))
+      groupedMessages.get(MetadataRecordType.BROKER_RECORD).foreach(brokers =>
+        basis = processors.get(MetadataRecordType.BROKER_RECORD).process(basis, brokers))
+
+      // Check if we can process all TopicRecords at the same time.
+      // We can only do so as long as any topic name appears only once.
+      val topicRecords = groupedMessages.get(MetadataRecordType.TOPIC_RECORD)
+      val mustProcessTopicRecordsIndividually = if (topicRecords.isEmpty) false else {
+        topicRecords.get.groupBy(tr => tr.asInstanceOf[TopicRecord].name()).valuesIterator.exists(_.size > 1)
+      }
+      if (!mustProcessTopicRecordsIndividually && topicRecords.isDefined) {
+        val processor = processors.get(MetadataRecordType.TOPIC_RECORD)
+        processor.process(basis, topicRecords.get)
+      }
+
+      // now process everything else one-by-one
+      apiMessages.foreach(_ match {
+        case _: BrokerRecord => // ignore
+        case topicRecord: TopicRecord =>
+          if (mustProcessTopicRecordsIndividually) {
+            val processor = processors.get(MetadataRecordType.TOPIC_RECORD)
+            basis = processor.process(basis, topicRecord)
+          }
+        case otherMessage =>
+          val processor = processors.get(MetadataRecordType.fromId(otherMessage.apiKey()))
+          basis = processor.process(basis, otherMessage)
       })
       // only expose the changes at the end -- do not expose intermediate state
       basis.writeIfNecessary()
