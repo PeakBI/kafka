@@ -120,6 +120,7 @@ class BrokerMetadataEventManager(config: KafkaConfig,
 
       // Check if we can process all TopicRecords at the same time.
       // We can only do so as long as any topic name appears only once.
+      // This check will no longer be necessary once KIP-516 Topic Identifiers becomes available.
       val topicRecords = groupedMessages.get(MetadataRecordType.TOPIC_RECORD)
       val mustProcessTopicRecordsIndividually = if (topicRecords.isEmpty) false else {
         topicRecords.get.groupBy(tr => tr.asInstanceOf[TopicRecord].name()).valuesIterator.exists(_.size > 1)

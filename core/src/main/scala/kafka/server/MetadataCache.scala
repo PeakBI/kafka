@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, UUID}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{mutable, Seq, Set}
@@ -388,7 +388,8 @@ class MetadataCache(brokerId: Int) extends Logging with ValueHolder[MetadataSnap
 case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
                             controllerId: Option[Int],
                             aliveBrokers: mutable.LongMap[Broker],
-                            aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+                            aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]],
+                            topicIdMap: mutable.Map[UUID, String] = mutable.Map.empty) {
   def copyPartitionStates(): mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]] = {
     val partitionStatesCopy = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](partitionStates.size)
     partitionStates.forKeyValue { (topic, oldPartitionStates) =>

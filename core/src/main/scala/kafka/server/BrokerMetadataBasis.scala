@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorPartitionsDeleted}
+import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorPartitionsDeleting}
 import org.apache.kafka.common.protocol.ApiMessage
 
 /**
@@ -28,29 +28,29 @@ import org.apache.kafka.common.protocol.ApiMessage
  * The parts of the metadata that are not the only write path are represented by actions that can be applied.
  *
  * @param metadataCacheBasis the MetadataCacheBasis defining part of the value
- * @param groupCoordinatorPartitionsDeleted the action indicating to the group coordinator what partitions (if any)
- *                                          have been deleted
+ * @param groupCoordinatorPartitionsDeleting the action indicating to the group coordinator what partitions (if any)
+ *                                           are deleting
  * @param updateClientQuotaCallbackMetricConfigs the action giving the client quota callback (if any) an opportunity to
  *                                               decide if quota metric configs need to be updated based on current
  *                                               cluster metadata
  */
 case class BrokerMetadataValue(metadataCacheBasis: MetadataCacheBasis,
-                               groupCoordinatorPartitionsDeleted: GroupCoordinatorPartitionsDeleted,
+                               groupCoordinatorPartitionsDeleting: GroupCoordinatorPartitionsDeleting,
                                updateClientQuotaCallbackMetricConfigs: UpdateClientQuotaCallbackMetricConfigs
                               ) {
   def newValue(metadataCacheBasis: MetadataCacheBasis): BrokerMetadataValue = {
     // keep all parts except the one given
-    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleted, updateClientQuotaCallbackMetricConfigs)
+    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleting, updateClientQuotaCallbackMetricConfigs)
   }
 
-  def newValue(groupCoordinatorPartitionsDeleted: GroupCoordinatorPartitionsDeleted): BrokerMetadataValue = {
+  def newValue(groupCoordinatorPartitionsDeleting: GroupCoordinatorPartitionsDeleting): BrokerMetadataValue = {
     // keep all parts except the one given
-    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleted, updateClientQuotaCallbackMetricConfigs)
+    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleting, updateClientQuotaCallbackMetricConfigs)
   }
 
   def newValue(updateClientQuotaCallbackMetricConfigs: UpdateClientQuotaCallbackMetricConfigs): BrokerMetadataValue = {
     // keep all parts except the one given
-    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleted, updateClientQuotaCallbackMetricConfigs)
+    BrokerMetadataValue(metadataCacheBasis, groupCoordinatorPartitionsDeleting, updateClientQuotaCallbackMetricConfigs)
   }
 
   /**
@@ -58,7 +58,7 @@ case class BrokerMetadataValue(metadataCacheBasis: MetadataCacheBasis,
    */
   def writeIfNecessary() : Unit = {
     metadataCacheBasis.writeIfNecessary()
-    groupCoordinatorPartitionsDeleted.groupCoordinatorHandlePartitionsDeletedIfNecessary()
+    groupCoordinatorPartitionsDeleting.groupCoordinatorHandlePartitionsDeletingIfNecessary()
   }
 }
 
@@ -83,7 +83,7 @@ private class BrokerMetadataHolder(kafkaConfig: KafkaConfig,
                                    quotaManagers: QuotaFactory.QuotaManagers) extends ValueHolder[BrokerMetadataValue] {
   override def retrieveValue(): BrokerMetadataValue = {
     BrokerMetadataValue(new MetadataCacheBasis(metadataCache),
-      new GroupCoordinatorPartitionsDeleted(groupCoordinator),
+      new GroupCoordinatorPartitionsDeleting(groupCoordinator),
     new UpdateClientQuotaCallbackMetricConfigs(kafkaConfig, quotaManagers, metadataCache, clusterId))
   }
 

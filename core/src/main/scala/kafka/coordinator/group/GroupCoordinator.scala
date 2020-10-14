@@ -1394,31 +1394,31 @@ case class LeaveGroupResult(topLevelError: Errors,
                             memberResponses : List[LeaveMemberResponse])
 
 /**
- * Represents the action telling the group coordinator that partitions have been deleted.  A new action that
- * encompasses additional deleted partitions can be created via #addPartitionsDeleted(List[TopicPartition]).
- * The action can be invoked at any time via (idempotent) #groupCoordinatorHandlePartitionsDeletedIfNecessary()
+ * Represents the action telling the group coordinator that partitions are deleting.  A new action that
+ * encompasses additional deleting partitions can be created via #addPartitionsDeleting(List[TopicPartition]).
+ * The action can be invoked at any time via (idempotent) #groupCoordinatorHandlePartitionsDeletingIfNecessary()
  *
  * @param groupCoordinator the group coordinator
- * @param partitionsDeleted the partitions that have been deleted
+ * @param partitionsDeleting the partitions that are deleting
  */
-class GroupCoordinatorPartitionsDeleted(val groupCoordinator: GroupCoordinator,
-                                        partitionsDeleted: List[TopicPartition] = List()) {
-  private var alreadyHandledPartitionsDeleted = false
+class GroupCoordinatorPartitionsDeleting(val groupCoordinator: GroupCoordinator,
+                                         partitionsDeleting: Set[TopicPartition] = Set.empty) {
+  private var alreadyHandledPartitionsDeleting = false
 
-  def addPartitionsDeleted(additionalPartitionsDeleted: List[TopicPartition]): GroupCoordinatorPartitionsDeleted = {
-    if (additionalPartitionsDeleted.isEmpty) {
+  def addPartitionsDeleting(additionalPartitionsDeleting: Set[TopicPartition]): GroupCoordinatorPartitionsDeleting = {
+    if (additionalPartitionsDeleting.isEmpty) {
       this
     } else {
-      val currentPartitionsDeletedNotYetHandled =
-        if (alreadyHandledPartitionsDeleted) List() else partitionsDeleted
-      new GroupCoordinatorPartitionsDeleted(groupCoordinator, currentPartitionsDeletedNotYetHandled ++ additionalPartitionsDeleted)
+      val currentPartitionsDeletingNotYetHandled =
+        if (alreadyHandledPartitionsDeleting) Set.empty else partitionsDeleting
+      new GroupCoordinatorPartitionsDeleting(groupCoordinator, currentPartitionsDeletingNotYetHandled ++ additionalPartitionsDeleting)
     }
   }
 
-  def groupCoordinatorHandlePartitionsDeletedIfNecessary(): Unit = {
-    if (!alreadyHandledPartitionsDeleted && partitionsDeleted.nonEmpty) {
-      groupCoordinator.handleDeletedPartitions(partitionsDeleted)
-      alreadyHandledPartitionsDeleted = true
+  def groupCoordinatorHandlePartitionsDeletingIfNecessary(): Unit = {
+    if (!alreadyHandledPartitionsDeleting && partitionsDeleting.nonEmpty) {
+      groupCoordinator.handleDeletedPartitions(partitionsDeleting.toList)
+      alreadyHandledPartitionsDeleting = true
     }
   }
 }

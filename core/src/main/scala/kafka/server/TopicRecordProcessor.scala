@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.UUID
+
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metadata.TopicRecord
 import org.apache.kafka.common.protocol.ApiMessage
@@ -39,6 +41,9 @@ class TopicRecordProcessor extends ApiMessageProcessor {
       throw new IllegalArgumentException(s"$getClass can only process a list of records when they are all topic records: $apiMessages")
     })
     val topicRecords = apiMessages.asInstanceOf[List[TopicRecord]]
+    // Check if we can process all TopicRecords at the same time.
+    // We can only do so as long as any topic name appears only once.
+    // This check will no longer be necessary once KIP-516 Topic Identifiers becomes available.
     if (topicRecords.groupBy(tr => tr.name()).valuesIterator.exists(_.size > 1)) {
       throw new IllegalArgumentException(s"$getClass can only process a list of topic records when every topic appears just once: $apiMessages")
     }
@@ -54,54 +59,65 @@ class TopicRecordProcessor extends ApiMessageProcessor {
     val metadataCache = metadataCacheBasis.metadataCache
     val traceEnabled = metadataCache.stateChangeTraceEnabled()
     val topicsGroupedByDeleting = topicRecords.groupBy(tr => tr.deleting())
-    topicsGroupedByDeleting.get(false).foreach(addedTopics => {
-      addedTopics.foreach(topicRecord => {
-        val topicName = topicRecord.name()
-        val currentPartitionStatesForTopic = partitionStatesCopy.get(topicName)
-        if (currentPartitionStatesForTopic.isDefined) {
-          throw new IllegalStateException(s"Saw a new topic that already exists: $topicName")
-        }
-        partitionStatesCopy(topicName) = mutable.LongMap.empty
-        if (traceEnabled) {
-          metadataCache.logStateChangeTrace(s"Will cache new topic $topicName with no partitions (yet) via metadata log")
-        }
-      })
+    val topicsAdding = topicsGroupedByDeleting.getOrElse(false, List.empty[TopicRecord])
+    val topicsDeleting = topicsGroupedByDeleting.getOrElse(true, List.empty[TopicRecord])
+    val topicIdMapMaybeCopy: mutable.Map[UUID, String] = if (topicsAdding.isEmpty) metadataSnapshot.topicIdMap else {
+      val copy = new mutable.HashMap[UUID, String](metadataSnapshot.topicIdMap.size + topicsAdding.size,
+        mutable.HashMap.defaultLoadFactor)
+      copy.addAll(metadataSnapshot.topicIdMap)
+      copy
+    }
+
+    topicsAdding.foreach(topicRecord => {
+      val topicId = topicRecord.topicId()
+      val topicName = topicRecord.name()
+      val currentPartitionStatesForTopic = partitionStatesCopy.get(topicName)
+      if (currentPartitionStatesForTopic.isDefined) {
+        throw new IllegalStateException(s"Saw a new topic wth a name that already exists: $topicRecord")
+      }
+      partitionStatesCopy(topicName) = mutable.LongMap.empty
+      if (topicIdMapMaybeCopy.contains(topicId)) {
+        throw new IllegalStateException(s"Saw a new topic with a topicId that already exists: $topicRecord")
+      }
+      topicIdMapMaybeCopy(topicId) = topicName
+      if (traceEnabled) {
+        metadataCache.logStateChangeTrace(s"Will cache new topic $topicId/$topicName with no partitions (yet) via metadata log")
+      }
     })
-    val deletedTopics = topicsGroupedByDeleting.get(true)
-    if (deletedTopics.isEmpty) {
+    if (topicsDeleting.isEmpty) {
       val newMetadataCacheBasis = metadataCacheBasis.newBasis(
-        MetadataSnapshot(partitionStatesCopy, metadataSnapshot.controllerId, metadataSnapshot.aliveBrokers, metadataSnapshot.aliveNodes))
+        MetadataSnapshot(partitionStatesCopy,
+          metadataSnapshot.controllerId, metadataSnapshot.aliveBrokers, metadataSnapshot.aliveNodes,
+          topicIdMapMaybeCopy))
       brokerMetadataBasis.newBasis(brokerMetadataValue.newValue(newMetadataCacheBasis))
     } else {
-      var allDeletedPartitions = List[TopicPartition]()
-      deletedTopics.foreach(deletedTopics => {
-        deletedTopics.foreach(topicRecord => {
-          val topicName = topicRecord.name()
-          val currentPartitionStatesForTopic = partitionStatesCopy.get(topicName)
-          if (currentPartitionStatesForTopic.isEmpty) {
-            throw new IllegalStateException(s"Saw a topic being deleted that doesn't exist: $topicName")
-          }
-          val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
-          val partitionsToDelete = currentPartitionStatesForTopic.get.keySet
-          partitionsToDelete.foreach(partition => {
-            val tp = new TopicPartition(topicName, partition.toInt)
-            metadataCache.removePartitionInfo(partitionStatesCopy, topicName, tp.partition())
-            if (traceEnabled)
-              metadataCache.logStateChangeTrace(s"Will delete partition $tp from metadata cache in response to a TopicRecord on the metadata log")
-            deletedPartitions += tp
-            allDeletedPartitions = allDeletedPartitions ++ deletedPartitions.toList
-          })
+      var allDeletingPartitions = Set.empty[TopicPartition]
+      topicsDeleting.foreach(topicRecord => {
+        val topicName = topicRecord.name()
+        val currentPartitionStatesForTopic = partitionStatesCopy.get(topicName)
+        if (currentPartitionStatesForTopic.isEmpty) {
+          throw new IllegalStateException(s"Saw a topic being deleted that doesn't exist: $topicName")
+        }
+        val deletingPartitionsForThisTopic = currentPartitionStatesForTopic.get.keySet.map(
+          partition => new TopicPartition(topicName, partition.toInt))
+        deletingPartitionsForThisTopic.foreach(tp => {
+          metadataCache.removePartitionInfo(partitionStatesCopy, topicName, tp.partition())
+          if (traceEnabled)
+            metadataCache.logStateChangeTrace(s"Will delete partition $tp from metadata cache in response to a TopicRecord on the metadata log")
         })
+        allDeletingPartitions = allDeletingPartitions ++ deletingPartitionsForThisTopic
       })
       if (traceEnabled)
-        metadataCache.logStateChangeTrace(s"Will delete ${allDeletedPartitions.size} partitions from metadata cache in response to TopicRecord(s) in metadata log")
+        metadataCache.logStateChangeTrace(s"Will delete ${allDeletingPartitions.size} partitions from metadata cache in response to TopicRecord(s) in metadata log")
       val newMetadataCacheBasis = metadataCacheBasis.newBasis(
-        MetadataSnapshot(partitionStatesCopy, metadataSnapshot.controllerId, metadataSnapshot.aliveBrokers, metadataSnapshot.aliveNodes))
-      val newGroupCoordinatorPartitionsDeleted = brokerMetadataValue.groupCoordinatorPartitionsDeleted.addPartitionsDeleted(allDeletedPartitions)
+        MetadataSnapshot(partitionStatesCopy,
+          metadataSnapshot.controllerId, metadataSnapshot.aliveBrokers, metadataSnapshot.aliveNodes,
+          topicIdMapMaybeCopy))
+      val newGroupCoordinatorPartitionsDeleting = brokerMetadataValue.groupCoordinatorPartitionsDeleting.addPartitionsDeleting(allDeletingPartitions)
       val newUpdateClientQuotaCallbackMetricConfigs = brokerMetadataValue.updateClientQuotaCallbackMetricConfigs.enableConfigUpdates()
       brokerMetadataBasis.newBasis(
         brokerMetadataValue.newValue(newMetadataCacheBasis)
-          .newValue(newGroupCoordinatorPartitionsDeleted)
+          .newValue(newGroupCoordinatorPartitionsDeleting)
           .newValue(newUpdateClientQuotaCallbackMetricConfigs))
     }
   }
