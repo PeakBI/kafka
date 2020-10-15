@@ -230,16 +230,16 @@ public class JsonConverter implements Converter, HeaderConverter {
         LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
-                if (!(value instanceof java.util.Date))
-                    throw new DataException("Invalid type for Date, expected Date but was " + value.getClass());
-                return JSON_NODE_FACTORY.numberNode(Date.fromLogical(schema, (java.util.Date) value));
+                if (!(value instanceof String))
+                    throw new DataException("Invalid type for Date, expected String but was " + value.getClass());
+                return JSON_NODE_FACTORY.textNode(value.toString());
             }
 
             @Override
             public Object toConnect(final Schema schema, final JsonNode value) {
-                if (!(value.isInt()))
+                if (!(value.isTextual()))
                     throw new DataException("Invalid type for Date, underlying representation should be integer but was " + value.getNodeType());
-                return Date.toLogical(schema, value.intValue());
+                return Date.toLogical(schema, value.textValue());
             }
         });
 
@@ -262,16 +262,16 @@ public class JsonConverter implements Converter, HeaderConverter {
         LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
-                if (!(value instanceof java.util.Date))
-                    throw new DataException("Invalid type for Timestamp, expected Date but was " + value.getClass());
-                return JSON_NODE_FACTORY.numberNode(Timestamp.fromLogical(schema, (java.util.Date) value));
+                if (!(value instanceof String))
+                    throw new DataException("Invalid type for Timestamp, expected String but was " + value.getClass());
+                return JSON_NODE_FACTORY.textNode(value.toString());
             }
 
             @Override
             public Object toConnect(final Schema schema, final JsonNode value) {
-                if (!(value.isIntegralNumber()))
+                if (!(value.isTextual()))
                     throw new DataException("Invalid type for Timestamp, underlying representation should be integral but was " + value.getNodeType());
-                return Timestamp.toLogical(schema, value.longValue());
+                return Timestamp.toLogical(schema, value.textValue());
             }
         });
     }

@@ -139,7 +139,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             public Date toRaw(Config config, Object orig) {
                 if (!(orig instanceof Long))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
-                return Timestamp.toLogical(Timestamp.SCHEMA, (Long) orig);
+                return Timestamp.toLogical(Timestamp.SCHEMA, (String) orig);
             }
 
             @Override
@@ -148,7 +148,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Long toType(Config config, Date orig) {
+            public String toType(Config config, Date orig) {
                 return Timestamp.fromLogical(Timestamp.SCHEMA, orig);
             }
         });

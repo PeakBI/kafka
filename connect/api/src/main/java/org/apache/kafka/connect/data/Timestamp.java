@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 
 /**
  * <p>
@@ -33,7 +35,7 @@ public class Timestamp {
      * @return a SchemaBuilder
      */
     public static SchemaBuilder builder() {
-        return SchemaBuilder.int64()
+        return SchemaBuilder.string()
                 .name(LOGICAL_NAME)
                 .version(1);
     }
@@ -45,15 +47,22 @@ public class Timestamp {
      * @param value the logical value
      * @return the encoded value
      */
-    public static long fromLogical(Schema schema, java.util.Date value) {
+    public static String fromLogical(Schema schema, java.util.Date value) {
         if (!(LOGICAL_NAME.equals(schema.name())))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
-        return value.getTime();
+        return value.toString();
     }
 
-    public static java.util.Date toLogical(Schema schema, long value) {
+    public static java.util.Date toLogical(Schema schema, String value) {
         if (!(LOGICAL_NAME.equals(schema.name())))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
-        return new java.util.Date(value);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-DD hh:mm:ss");
+        java.util.Date date = null;
+        try {
+            date = sdf.parse(value);
+        } catch (ParseException e) {
+            throw new DataException("Cannot parse timestamp");
+        }
+        return date;
     }
 }

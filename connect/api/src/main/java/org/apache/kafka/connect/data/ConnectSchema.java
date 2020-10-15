@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 
@@ -65,10 +66,14 @@ public class ConnectSchema implements Schema {
                 JAVA_CLASS_SCHEMA_TYPES.put(schemaClass, schemaClasses.getKey());
         }
 
+        List<Class> timestampClasses = new LinkedList<Class>();
+        timestampClasses.add((Class) String.class);
+        timestampClasses.add((Class) java.util.Date.class);
+
         LOGICAL_TYPE_CLASSES.put(Decimal.LOGICAL_NAME, Collections.singletonList((Class) BigDecimal.class));
-        LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, Collections.singletonList((Class) java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Date.LOGICAL_NAME, timestampClasses);
         LOGICAL_TYPE_CLASSES.put(Time.LOGICAL_NAME, Collections.singletonList((Class) java.util.Date.class));
-        LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, Collections.singletonList((Class) java.util.Date.class));
+        LOGICAL_TYPE_CLASSES.put(Timestamp.LOGICAL_NAME, timestampClasses);
         // We don't need to put these into JAVA_CLASS_SCHEMA_TYPES since that's only used to determine schemas for
         // schemaless data and logical types will have ambiguous schemas (e.g. many of them use the same Java class) so
         // they should not be used without schemas.

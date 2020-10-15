@@ -18,6 +18,8 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.TimeZone;
 
@@ -32,17 +34,13 @@ import java.util.TimeZone;
 public class Date {
     public static final String LOGICAL_NAME = "org.apache.kafka.connect.data.Date";
 
-    private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
-
-    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
-
     /**
      * Returns a SchemaBuilder for a Date. By returning a SchemaBuilder you can override additional schema settings such
      * as required/optional, default value, and documentation.
      * @return a SchemaBuilder
      */
     public static SchemaBuilder builder() {
-        return SchemaBuilder.int32()
+        return SchemaBuilder.string()
                 .name(LOGICAL_NAME)
                 .version(1);
     }
@@ -54,22 +52,24 @@ public class Date {
      * @param value the logical value
      * @return the encoded value
      */
-    public static int fromLogical(Schema schema, java.util.Date value) {
+    public static String fromLogical(Schema schema, java.util.Date value) {
         if (!(LOGICAL_NAME.equals(schema.name())))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
-        Calendar calendar = Calendar.getInstance(UTC);
-        calendar.setTime(value);
-        if (calendar.get(Calendar.HOUR_OF_DAY) != 0 || calendar.get(Calendar.MINUTE) != 0 ||
-                calendar.get(Calendar.SECOND) != 0 || calendar.get(Calendar.MILLISECOND) != 0) {
-            throw new DataException("Kafka Connect Date type should not have any time fields set to non-zero values.");
-        }
-        long unixMillis = calendar.getTimeInMillis();
-        return (int) (unixMillis / MILLIS_PER_DAY);
+        return value.toString();
     }
 
-    public static java.util.Date toLogical(Schema schema, int value) {
+    public static java.util.Date toLogical(Schema schema, String value) {
+        // This has to be changed as it is being used by timestamp converter but 
+        // won't affect our process
         if (!(LOGICAL_NAME.equals(schema.name())))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
-        return new java.util.Date(value * MILLIS_PER_DAY);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-DD");
+        java.util.Date date = null;
+        try {
+            date = sdf.parse(value);
+        } catch (ParseException e) {
+            throw new DataException("Cannot parse timestamp");
+        }
+        return date;
     }
 }
