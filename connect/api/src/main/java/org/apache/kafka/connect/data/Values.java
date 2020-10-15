@@ -463,31 +463,6 @@ public class Values {
                 }
                 return (short) asLong(value, fromSchema, null);
             case INT32:
-                if (Date.LOGICAL_NAME.equals(toSchema.name())) {
-                    if (value instanceof String) {
-                        SchemaAndValue parsed = parseString(value.toString());
-                        value = parsed.value();
-                    }
-                    if (value instanceof java.util.Date) {
-                        if (fromSchema != null) {
-                            String fromSchemaName = fromSchema.name();
-                            if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
-                                return value;
-                            }
-                            if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
-                                // Just get the number of days from this timestamp
-                                long millis = ((java.util.Date) value).getTime();
-                                int days = (int) (millis / MILLIS_PER_DAY); // truncates
-                                return Date.toLogical(toSchema, days);
-                            }
-                        } else {
-                            // There is no fromSchema, so no conversion is needed
-                            return value;
-                        }
-                    }
-                    long numeric = asLong(value, fromSchema, null);
-                    return Date.toLogical(toSchema, (int) numeric);
-                }
                 if (Time.LOGICAL_NAME.equals(toSchema.name())) {
                     if (value instanceof String) {
                         SchemaAndValue parsed = parseString(value.toString());
@@ -521,35 +496,6 @@ public class Values {
                 }
                 return (int) asLong(value, fromSchema, null);
             case INT64:
-                if (Timestamp.LOGICAL_NAME.equals(toSchema.name())) {
-                    if (value instanceof String) {
-                        SchemaAndValue parsed = parseString(value.toString());
-                        value = parsed.value();
-                    }
-                    if (value instanceof java.util.Date) {
-                        java.util.Date date = (java.util.Date) value;
-                        if (fromSchema != null) {
-                            String fromSchemaName = fromSchema.name();
-                            if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
-                                int days = Date.fromLogical(fromSchema, date);
-                                long millis = days * MILLIS_PER_DAY;
-                                return Timestamp.toLogical(toSchema, millis);
-                            }
-                            if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
-                                long millis = Time.fromLogical(fromSchema, date);
-                                return Timestamp.toLogical(toSchema, millis);
-                            }
-                            if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
-                                return value;
-                            }
-                        } else {
-                            // There is no fromSchema, so no conversion is needed
-                            return value;
-                        }
-                    }
-                    long numeric = asLong(value, fromSchema, null);
-                    return Timestamp.toLogical(toSchema, numeric);
-                }
                 if (value instanceof Long) {
                     return value;
                 }
@@ -615,17 +561,6 @@ public class Values {
         }
         if (fromSchema != null) {
             String schemaName = fromSchema.name();
-            if (value instanceof java.util.Date) {
-                if (Date.LOGICAL_NAME.equals(schemaName)) {
-                    return Date.fromLogical(fromSchema, (java.util.Date) value);
-                }
-                if (Time.LOGICAL_NAME.equals(schemaName)) {
-                    return Time.fromLogical(fromSchema, (java.util.Date) value);
-                }
-                if (Timestamp.LOGICAL_NAME.equals(schemaName)) {
-                    return Timestamp.fromLogical(fromSchema, (java.util.Date) value);
-                }
-            }
             throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + fromSchema, error);
         }
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to a number", error);
