@@ -572,8 +572,8 @@ subprojects {
       scalaCompileOptions.additionalParameters += ["-release", minJavaVersion]
 
     configure(scalaCompileOptions.forkOptions) {
-      memoryMaximumSize = defaultMaxHeapSize
-      jvmArgs = defaultJvmArgs
+      memoryMaximumSize = '1g'
+      jvmArgs = ['-XX:MaxPermSize=512m']
     }
   }
 
