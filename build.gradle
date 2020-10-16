@@ -1109,7 +1109,7 @@ project(':clients') {
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
-  task processTestMessages(type:JavaExec) {
+  /*task processTestMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "-p", "org.apache.kafka.common.message",
@@ -1119,7 +1119,7 @@ project(':clients') {
            ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
-  }
+  }*/
 
   sourceSets {
     main {
@@ -1136,7 +1136,7 @@ project(':clients') {
 
   compileJava.dependsOn 'processMessages'
 
-  compileTestJava.dependsOn 'processTestMessages'
+  //compileTestJava.dependsOn 'processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
