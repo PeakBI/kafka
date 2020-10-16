@@ -412,7 +412,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -1109,18 +1109,6 @@ project(':clients') {
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
-  /*task processTestMessages(type:JavaExec) {
-    main = "org.apache.kafka.message.MessageGenerator"
-    classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "-p", "org.apache.kafka.common.message",
-             "-o", "src/generated-test/java/org/apache/kafka/common/message",
-             "-i", "src/test/resources/common/message",
-             "-m", "MessageDataGenerator", "JsonConverterGenerator"
-           ]
-    inputs.dir("src/test/resources/common/message")
-    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
-  }*/
-
   sourceSets {
     main {
       java {
@@ -1135,8 +1123,6 @@ project(':clients') {
   }
 
   compileJava.dependsOn 'processMessages'
-
-  //compileTestJava.dependsOn 'processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
@@ -1219,7 +1205,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -2161,4 +2147,3 @@ task aggregatedJavadoc(type: Javadoc) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
-
