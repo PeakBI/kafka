@@ -136,7 +136,7 @@ ext {
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
-  defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
+  defaultJvmArgs = ["-Xss8m", "-XX:+UseParallelGC"]
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
@@ -572,8 +572,8 @@ subprojects {
       scalaCompileOptions.additionalParameters += ["-release", minJavaVersion]
 
     configure(scalaCompileOptions.forkOptions) {
-      memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m']
+      memoryMaximumSize = defaultMaxHeapSize
+      jvmArgs = defaultJvmArgs
     }
   }
 
